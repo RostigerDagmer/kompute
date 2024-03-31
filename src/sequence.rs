@@ -103,7 +103,7 @@ impl Sequence {
     pub fn eval(&mut self) -> Self {
         debug!("Kompute sequence EVAL BEGIN");
 
-        self.eval_async().eval_await(4000)
+        self.eval_async().eval_await(30_000_000_000) // 30 seconds
     }
 
     pub fn eval_with_op(&mut self, op: Arc<Mutex<dyn OpBase>>) -> Self {
@@ -167,7 +167,7 @@ impl Sequence {
             warn!("Kompute Sequence evalAwait called without existing eval");
             return self.clone();
         }
-
+        
         let result = unsafe { self.device.wait_for_fences(&[self.fence.as_ref().unwrap().as_ref().to_owned()], true, wait_for) };
         match result {
             Err(vk::Result::TIMEOUT) => {

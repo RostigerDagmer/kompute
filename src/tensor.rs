@@ -22,6 +22,26 @@ pub struct Tensor {
     data_type_memory_size: u32,
 }
 
+impl std::fmt::Debug for Tensor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tensor")
+            .field("physical_device", &self.physical_device)
+            .field("data", &self.data)
+            .field("element_total_count", &self.element_total_count)
+            .field("element_memory_size", &self.element_memory_size)
+            .field("data_type", &self.data_type)
+            .field("tensor_type", &self.tensor_type)
+            .field("primary_buffer", &self.primary_buffer)
+            .field("primary_memory", &self.primary_memory)
+            .field("staging_buffer", &self.staging_buffer)
+            .field("staging_memory", &self.staging_memory)
+            .field("raw_data", &self.raw_data)
+            .field("size", &self.size)
+            .field("data_type_memory_size", &self.data_type_memory_size)
+            .finish()
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TensorDataTypes {
     Bool,

@@ -261,6 +261,9 @@ impl Algorithm {
         );
 
         let mut descriptor_set_bindings = Vec::new();
+
+        // debug!("Kompute Algorithm creating descriptor set bindings: {:#?}", self.tensors);
+        
         for (i, tensor) in self.tensors.iter().enumerate() {
             let descriptor_set_binding = vk::DescriptorSetLayoutBinding::builder()
                 .binding(i as u32)
@@ -271,6 +274,8 @@ impl Algorithm {
             descriptor_set_bindings.push(descriptor_set_binding);
         }
 
+        // debug!("Kompute Algorithm creating descriptor set bindings: {:#?}", descriptor_set_bindings);
+    
         let descriptor_set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
             .flags(vk::DescriptorSetLayoutCreateFlags::empty())
             .bindings(&descriptor_set_bindings);
@@ -294,20 +299,25 @@ impl Algorithm {
         self.descriptor_set = Some(descriptor_sets[0]);
 
         debug!("Kompute Algorithm updating descriptor sets");
-        let mut compute_write_descriptor_sets = Vec::new();
-        for (i, tensor) in self.tensors.iter().enumerate() {
-            let descriptor_buffer_info = tensor.construct_descriptor_buffer_info();
 
-            let compute_write_descriptor_set = vk::WriteDescriptorSet::builder()
+        let compute_write_descriptor_infos = self.tensors.iter().map(|tensor| {
+            let descriptor_buffer_info = tensor.construct_descriptor_buffer_info();
+            vec![descriptor_buffer_info]
+        }).collect::<Vec<Vec<_>>>();
+        let compute_write_descriptor_sets = compute_write_descriptor_infos.iter().enumerate().map(|(i, descriptor_buffer_info)| {
+            
+            // debug!("Kompute Algorithm updating descriptor sets[{:#?}]: {:#?}", i, descriptor_buffer_info);
+
+            vk::WriteDescriptorSet::builder()
                 .dst_set(self.descriptor_set.unwrap())
                 .dst_binding(i as u32)
                 .dst_array_element(0)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(slice::from_ref(&descriptor_buffer_info))
-                .build();
+                .buffer_info(descriptor_buffer_info.as_slice())
+                .build()
+        }).collect::<Vec<vk::WriteDescriptorSet>>();
 
-            compute_write_descriptor_sets.push(compute_write_descriptor_set);
-        }
+        // debug!("Kompute Algorithm updating descriptor sets: {:#?}", compute_write_descriptor_sets);
 
         unsafe { self.device
             .update_descriptor_sets(&compute_write_descriptor_sets, &[]) };

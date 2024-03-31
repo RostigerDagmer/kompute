@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::tensor::{Tensor, TensorTypes};
 use ash::vk;
+use log::debug;
 
 pub struct OpTensorSyncLocal {
     tensors: Vec<Arc<Tensor>>,
@@ -45,6 +46,6 @@ impl super::OpBase for OpTensorSyncLocal {
     }
 
     fn post_eval(&self, _command_buffer: vk::CommandBuffer) {
-        println!("Kompute OpTensorSyncLocal mapping data into tensor local");
+        debug!("Kompute OpTensorSyncLocal mapping data into tensor local");
     }
 }
