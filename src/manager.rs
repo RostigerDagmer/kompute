@@ -1,4 +1,3 @@
-#[cfg(feature = "debug_layer")]
 use ash::extensions::ext::DebugUtils;
 use ash::vk::Handle;
 use ash::{vk, Device, Entry, Instance};

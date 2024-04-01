@@ -1,12 +1,12 @@
-mod algorithm;
-mod core;
-mod manager;
-mod sequence;
-mod tensor;
-mod shader_logistic_regression;
-mod shader_op_mult;
-mod operations;
-mod shaderutil;
+pub mod algorithm;
+pub mod core;
+pub mod manager;
+pub mod sequence;
+pub mod tensor;
+pub mod shader_logistic_regression;
+pub mod shader_op_mult;
+pub mod operations;
+pub mod shaderutil;
 
 
 #[cfg(test)]
