@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use ash::vk;
-use crate::tensor::Tensor;
+use crate::tensor::{RawTensor, Tensor};
 use log::debug;
 
 pub struct OpMemoryBarrier {
-    tensors: Vec<Arc<Tensor>>,
+    tensors: Vec<Arc<RawTensor>>,
     src_access_mask: vk::AccessFlags,
     dst_access_mask: vk::AccessFlags,
     src_stage_mask: vk::PipelineStageFlags,
@@ -14,7 +14,7 @@ pub struct OpMemoryBarrier {
 
 impl OpMemoryBarrier {
     pub fn new(
-        tensors: Vec<Arc<Tensor>>,
+        tensors: Vec<Arc<RawTensor>>,
         src_access_mask: vk::AccessFlags,
         dst_access_mask: vk::AccessFlags,
         src_stage_mask: vk::PipelineStageFlags,

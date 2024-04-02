@@ -2,10 +2,11 @@ use ash::vk::{self, ShaderStageFlags};
 use log::{debug, info, warn};
 use std::ffi::{CString, c_void};
 use std::slice;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::vec;
 
-use crate::tensor::{Tensor, TensorData};
+use crate::shape::Shape;
+use crate::tensor::{RawTensor, Tensor, TensorData};
 use crate::shaderutil::*;
 
 type PushConstants<T: TensorData> = Vec<T>;
@@ -20,7 +21,7 @@ pub struct Algorithm {
     descriptor_set_layout: Option<vk::DescriptorSetLayout>,
     shader_module: Option<vk::ShaderModule>,
     device: Arc<ash::Device>,
-    tensors: Vec<Arc<Tensor>>,
+    tensors: Vec<Arc<Mutex<RawTensor>>>,
     spirv: Vec<u32>,
     workgroup: [u32; 3],
     push_constant_data: Option<Vec<u8>>,
@@ -36,7 +37,7 @@ pub struct Algorithm {
 impl Algorithm {
     pub fn new<T: TensorData, S: TensorData>(
         device: Arc<ash::Device>,
-        tensors: Vec<Arc<Tensor>>,
+        tensors: Vec<Arc<Mutex<RawTensor>>>,
         shader_source: ShaderSource,
         workgroup: [u32; 3],
         specialization_constants: Vec<T>,
@@ -108,7 +109,7 @@ impl Algorithm {
 
     pub fn rebuild(
         &mut self,
-        tensors: Vec<Arc<Tensor>>,
+        tensors: Vec<Arc<Mutex<RawTensor>>>,
         shader_source: ShaderSource,
         workgroup: Option<[u32; 3]>,
         specialization_constants: Option<Vec<Box<dyn TensorData>>>,
@@ -165,7 +166,7 @@ impl Algorithm {
             Some(workgroup) => self.set_workgroup(workgroup, if self.tensors.is_empty() {
                 1
             } else {
-                self.tensors[0].size()
+                self.tensors[0].lock().unwrap().size()
             }),
             None => {}
         }
@@ -301,7 +302,7 @@ impl Algorithm {
         debug!("Kompute Algorithm updating descriptor sets");
 
         let compute_write_descriptor_infos = self.tensors.iter().map(|tensor| {
-            let descriptor_buffer_info = tensor.construct_descriptor_buffer_info();
+            let descriptor_buffer_info = tensor.lock().unwrap().construct_descriptor_buffer_info();
             vec![descriptor_buffer_info]
         }).collect::<Vec<Vec<_>>>();
         let compute_write_descriptor_sets = compute_write_descriptor_infos.iter().enumerate().map(|(i, descriptor_buffer_info)| {
@@ -492,7 +493,7 @@ impl Algorithm {
         self.workgroup
     }
 
-    pub fn get_tensors(&self) -> &[Arc<Tensor>] {
+    pub fn get_tensors(&self) -> &[Arc<Mutex<RawTensor>>] {
         &self.tensors
     }
 }

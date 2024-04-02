@@ -1,14 +1,14 @@
-use crate::tensor::{Tensor, TensorTypes};
+use crate::{shape::Shape, tensor::{Tensor, TensorTypes}};
 use ash::vk;
 
 use super::OpBase;
 
-pub struct OpTensorCopy {
-    tensors: Vec<std::sync::Arc<Tensor>>,
+pub struct OpTensorCopy<S: Shape> {
+    tensors: Vec<std::sync::Arc<Tensor<S>>>,
 }
 
-impl OpTensorCopy {
-    pub fn new(tensors: Vec<std::sync::Arc<Tensor>>) -> Result<Self, String> {
+impl<S: Shape> OpTensorCopy<S> {
+    pub fn new(tensors: Vec<std::sync::Arc<Tensor<S>>>) -> Result<Self, String> {
         if tensors.len() < 2 {
             return Err("OpTensorCopy called with less than 2 tensors".to_string());
         }
@@ -36,7 +36,7 @@ impl OpTensorCopy {
     }
 }
 
-impl OpBase for OpTensorCopy {
+impl<S: Shape> OpBase for OpTensorCopy<S> {
 
     fn record(&mut self, command_buffer: vk::CommandBuffer) {
         for i in 1..self.tensors.len() {

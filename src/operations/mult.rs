@@ -2,19 +2,19 @@ use std::borrow::BorrowMut;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use crate::algorithm::Algorithm;
-use crate::tensor::Tensor;
+use crate::tensor::RawTensor;
 use crate::shaderutil::ShaderSource;
 
 use super::OpAlgoDispatch;
 
 pub struct OpMult {
     dispatch: OpAlgoDispatch,
-    tensors: Vec<Arc<Tensor>>,
+    tensors: Vec<Arc<Mutex<RawTensor>>>, // <- opportunity for shape checking with the wrapped Tensor Type
     // algorithm: Arc<Algorithm>,
 }
 
 impl OpMult {
-    pub fn new(tensors: Vec<Arc<Tensor>>, algorithm: Arc<Mutex<Algorithm>>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(tensors: Vec<Arc<Mutex<RawTensor>>>, algorithm: Arc<Mutex<Algorithm>>) -> Result<Self, Box<dyn Error>> {
         if tensors.len() != 3 {
             return Err("Kompute OpMult expected 3 tensors".into());
         }

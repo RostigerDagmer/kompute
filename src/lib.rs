@@ -7,11 +7,13 @@ pub mod shader_logistic_regression;
 pub mod shader_op_mult;
 pub mod operations;
 pub mod shaderutil;
+pub mod shape;
 
 
 #[cfg(test)]
 mod tests {
     use crate::operations::OpTensorCopy;
+    use crate::shape::Rank1;
 
     use super::*;
     
@@ -30,7 +32,7 @@ mod tests {
         env_logger::init();
         let vec = vec![1,2,3,4];
         let mut m = manager::Manager::new(0,&[0],&[]);
-        let t1 = m.tensor(&vec, tensor::TensorTypes::Device).unwrap();
+        let t1 = m.tensor::<i32, Rank1<4>>(&vec, tensor::TensorTypes::Device).unwrap();
         assert_eq!(t1.tensor_type(), tensor::TensorTypes::Device);
     }
 
@@ -40,12 +42,12 @@ mod tests {
     }
     #[cfg(test)]
     mod tests {
-        use std::{borrow::BorrowMut, ffi::c_void, mem::ManuallyDrop, sync::{Arc, Mutex}};
+        use std::{borrow::BorrowMut, ffi::c_void, mem::ManuallyDrop, ops::Deref, sync::{Arc, Mutex}};
 
         use ash::vk;
         use log::info;
 
-        use crate::{shaderutil::ShaderSource, operations::OpTensorCopy};
+        use crate::{operations::OpTensorCopy, shaderutil::ShaderSource, tensor::RawTensor};
 
         use super::*;
         #[test]
@@ -60,10 +62,10 @@ mod tests {
             let a: Vec<f32> = vec![2., 2., 2.];
             let b: Vec<f32> = vec![1., 2., 3.];
             let c: Vec<f32> = vec![0., 0., 0.];
-            let tensor_in_a = mgr.tensor(&a, tensor::TensorTypes::Device).unwrap();
-            let tensor_in_b = mgr.tensor(&b, tensor::TensorTypes::Device).unwrap();
-            let tensor_out_a = mgr.tensor(&c, tensor::TensorTypes::Device).unwrap();
-            let tensor_out_b = mgr.tensor(&c, tensor::TensorTypes::Device).unwrap();
+            let tensor_in_a = mgr.tensor::<f32, Rank1<3>>(&a, tensor::TensorTypes::Device).unwrap();
+            let tensor_in_b = mgr.tensor::<f32, Rank1<3>>(&b, tensor::TensorTypes::Device).unwrap();
+            let tensor_out_a = mgr.tensor::<f32, Rank1<3>>(&c, tensor::TensorTypes::Device).unwrap();
+            let tensor_out_b = mgr.tensor::<f32, Rank1<3>>(&c, tensor::TensorTypes::Device).unwrap();
             
             info!("tensor_in_a.dtype: {:?}", tensor_in_a.data_type());
             info!("tensor_in_b.dtype: {:?}", tensor_in_b.data_type());
@@ -104,10 +106,10 @@ mod tests {
             let shader = ShaderSource::Code(shader.to_string());
 
             let params = vec![
-                tensor_in_a.clone(),
-                tensor_in_b.clone(),
-                tensor_out_a.clone(),
-                tensor_out_b.clone(),
+                tensor_in_a.raw.clone(),
+                tensor_in_b.raw.clone(),
+                tensor_out_a.raw.clone(),
+                tensor_out_b.raw.clone(),
             ];
 
             let workgroup = [3, 1, 1];
@@ -131,7 +133,7 @@ mod tests {
                 .record(Arc::new(Mutex::new(OpTensorSyncDevice::new(params.clone()).unwrap())))
                 .record(Arc::new(Mutex::new(OpAlgoDispatch::new(algorithm.clone()))))
                 .record(Arc::new(Mutex::new(OpTensorSyncDevice::new(params.clone()).unwrap())))
-                .record(Arc::new(Mutex::new(OpAlgoDispatch::new_with_push_constants(algorithm.clone(), push_consts_b))))
+                .record(Arc::new(Mutex::new(OpAlgoDispatch::new_with_push_constants(algorithm, push_consts_b))))
                 .record(Arc::new(Mutex::new(OpTensorSyncLocal::new(params.clone()).unwrap())))
                 .eval();
                 // .eval();
@@ -166,8 +168,8 @@ mod tests {
                 &[]);
             let a: ManuallyDrop<Vec<f32>> = ManuallyDrop::new(vec![1., 2., 3.]);
             let zero: ManuallyDrop<Vec<f32>> = ManuallyDrop::new(vec![0., 0., 0.]);
-            let tensor_in_a = mgr.tensor(&a, tensor::TensorTypes::Device).unwrap();
-            let tensor_out_a = mgr.tensor(&zero, tensor::TensorTypes::Device).unwrap();
+            let tensor_in_a = mgr.tensor::<f32, Rank1<3>>(&a, tensor::TensorTypes::Device).unwrap();
+            let tensor_out_a = mgr.tensor::<f32, Rank1<3>>(&zero, tensor::TensorTypes::Device).unwrap();
             
             let shader = r#"
                 #version 460
@@ -187,10 +189,9 @@ mod tests {
                 }
             "#;
             let shader = ShaderSource::Code(shader.to_string());
-
             let params = vec![
-                tensor_in_a.clone(),
-                tensor_out_a.clone(),
+                tensor_in_a.raw.clone(),
+                tensor_out_a.raw.clone(),
             ];
 
             let workgroup = [3, 1, 1];
@@ -211,7 +212,7 @@ mod tests {
                 .as_mut()
                 .unwrap()
                 .record(Arc::new(Mutex::new(OpTensorSyncDevice::new(params.clone()).unwrap())))
-                .record(Arc::new(Mutex::new(OpAlgoDispatch::new(algorithm.clone()))))
+                .record(Arc::new(Mutex::new(OpAlgoDispatch::new(algorithm))))
                 .record(Arc::new(Mutex::new(OpTensorSyncLocal::new(params.clone()).unwrap())))
                 .eval();
 
@@ -233,19 +234,21 @@ mod tests {
             let mut mgr = Manager::new(0, &[0], &[]);
             let test_vector: Vec<f32> = vec![1., 2., 3., 4.];
             let zero: Vec<f32> = vec![0., 0., 0., 0.];
-            let tensorA = mgr.tensor(&test_vector, tensor::TensorTypes::Device).unwrap();
-            let tensorB = mgr.tensor(&zero, tensor::TensorTypes::Device).unwrap();
-            let tensorC = mgr.tensor(&zero, tensor::TensorTypes::Device).unwrap();
-    
+            let tensorA = Arc::new(mgr.tensor::<f32, Rank1<4>>(&test_vector, tensor::TensorTypes::Device).unwrap());
+            let tensorB = Arc::new(mgr.tensor(&zero, tensor::TensorTypes::Device).unwrap());
+            let tensorC = Arc::new(mgr.tensor(&zero, tensor::TensorTypes::Device).unwrap());
+            
             let params = vec![tensorA.clone(), tensorB.clone(), tensorC.clone()];
+
+
             mgr.sequence(0, 0)
                 .unwrap()
                 .lock()
                 .as_mut()
                 .unwrap()
-                .record(Arc::new(Mutex::new(OpTensorSyncDevice::new(vec![tensorA.clone()]).unwrap())))
+                .record(Arc::new(Mutex::new(OpTensorSyncDevice::new(vec![tensorA.raw.clone()]).unwrap())))
                 .record(Arc::new(Mutex::new(OpTensorCopy::new(params.clone()).unwrap())))
-                .record(Arc::new(Mutex::new(OpTensorSyncLocal::new(params.clone()).unwrap())))
+                .record(Arc::new(Mutex::new(OpTensorSyncLocal::new(params.iter().map(|t| t.raw.clone()).collect()).unwrap())))
                 .eval();
     
             let a = tensorA.vector::<f32>();

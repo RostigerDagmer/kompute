@@ -46,7 +46,7 @@ impl super::OpBase for OpAlgoDispatch {
         let mut guard = self.algorithm.lock().unwrap();
         // Barrier to ensure the data is finished writing to buffer memory
         for tensor in guard.get_tensors() {
-            tensor.record_primary_buffer_memory_barrier(
+            tensor.lock().unwrap().record_primary_buffer_memory_barrier(
                 command_buffer,
                 vk::AccessFlags::TRANSFER_WRITE,
                 vk::AccessFlags::SHADER_READ,

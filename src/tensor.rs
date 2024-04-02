@@ -1,11 +1,199 @@
 use ash::{vk, Instance, Entry};
 use log::debug;
-use std::os::raw::c_void;
+use std::{marker::PhantomData, os::raw::c_void};
 use std::ptr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use ash::Device;
 
-pub struct Tensor {
+
+pub struct Tensor<S: Shape> {
+    shape: PhantomData<S>,
+    pub raw: Arc<Mutex<RawTensor>>,
+}
+
+impl<S: Shape> Tensor<S> {
+    pub fn new(
+        physical_device: Arc<vk::PhysicalDevice>,
+        device: Arc<Device>,
+        data: *mut c_void,
+        element_total_count: u32,
+        element_memory_size: u32,
+        data_type: TensorDataTypes,
+        tensor_type: TensorTypes,
+    ) -> Self {
+        let shape = PhantomData;
+        let raw = Arc::new(Mutex::new(RawTensor::new(
+            physical_device,
+            device,
+            data,
+            element_total_count,
+            element_memory_size,
+            data_type,
+            tensor_type,
+        )));
+
+        Self { shape, raw }
+    }
+
+    pub fn tensor_type(&self) -> TensorTypes {
+        self.raw.lock().unwrap().tensor_type()
+    }
+
+    pub fn is_init(&self) -> bool {
+        self.raw.lock().unwrap().is_init()
+    }
+
+    pub fn size(&self) -> u32 {
+        self.raw.lock().unwrap().size()
+    }
+
+    pub fn data_type_memory_size(&self) -> u32 {
+        self.raw.lock().unwrap().data_type_memory_size()
+    }
+
+    pub fn memory_size(&self) -> u32 {
+        self.raw.lock().unwrap().memory_size()
+    }
+
+    pub fn data_type(&self) -> TensorDataTypes {
+        self.raw.lock().unwrap().data_type()
+    }
+
+    pub fn raw_data(&self) -> *mut c_void {
+        self.raw.lock().unwrap().raw_data()
+    }
+
+    pub fn set_raw_data(&self, data: *const c_void) {
+        self.raw.lock().unwrap().set_raw_data(data);
+    }
+
+    pub fn rebuild(&mut self, entry: Arc<Entry>, instance: Arc<Instance>, data: *mut c_void, element_total_count: u32, element_memory_size: u32) {
+        self.raw.lock().unwrap().rebuild(entry, instance, data, element_total_count, element_memory_size);
+    }
+
+    pub fn vector<T: TensorData>(&self) -> Vec<T> {
+        self.raw.lock().unwrap().vector()
+    }
+
+    pub fn map_raw_data(&mut self) {
+        self.raw.lock().unwrap().map_raw_data();
+    }
+
+    pub fn unmap_raw_data(&mut self) {
+        self.raw.lock().unwrap().unmap_raw_data();
+    }
+
+    pub fn record_copy_from(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        copy_from_tensor: Arc<Tensor<S>>,
+    ) {
+        self.raw.lock().unwrap().record_copy_from(command_buffer, &copy_from_tensor.raw.lock().unwrap());
+    }
+
+    pub fn record_copy_from_staging_to_device(&self, command_buffer: vk::CommandBuffer) {
+        self.raw.lock().unwrap().record_copy_from_staging_to_device(command_buffer);
+    }
+
+    pub fn record_copy_from_device_to_staging(&self, command_buffer: vk::CommandBuffer) {
+        self.raw.lock().unwrap().record_copy_from_device_to_staging(command_buffer);
+    }
+
+    pub fn record_copy_buffer(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        buffer_from: vk::Buffer,
+        buffer_to: vk::Buffer,
+        buffer_size: vk::DeviceSize,
+        copy_region: vk::BufferCopy,
+    ) {
+        self.raw.lock().unwrap().record_copy_buffer(command_buffer, buffer_from, buffer_to, buffer_size, copy_region);
+    }
+
+    pub fn record_primary_buffer_memory_barrier(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        src_access_mask: vk::AccessFlags,
+        dst_access_mask: vk::AccessFlags,
+        src_stage_mask: vk::PipelineStageFlags,
+        dst_stage_mask: vk::PipelineStageFlags,
+    ) {
+        self.raw.lock().unwrap().record_primary_buffer_memory_barrier(command_buffer, src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask);
+    }
+
+    pub fn record_staging_buffer_memory_barrier(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        src_access_mask: vk::AccessFlags,
+        dst_access_mask: vk::AccessFlags,
+        src_stage_mask: vk::PipelineStageFlags,
+        dst_stage_mask: vk::PipelineStageFlags,
+    ) {
+        self.raw.lock().unwrap().record_staging_buffer_memory_barrier(command_buffer, src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask);
+    }
+
+    pub fn record_buffer_memory_barrier(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        buffer: vk::Buffer,
+        src_access_mask: vk::AccessFlags,
+        dst_access_mask: vk::AccessFlags,
+        src_stage_mask: vk::PipelineStageFlags,
+        dst_stage_mask: vk::PipelineStageFlags,
+    ) {
+        self.raw.lock().unwrap().record_buffer_memory_barrier(command_buffer, buffer, src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask);
+    }
+
+    pub fn construct_descriptor_buffer_info(&self) -> vk::DescriptorBufferInfo {
+        self.raw.lock().unwrap().construct_descriptor_buffer_info()
+    }
+
+    pub fn get_primary_buffer_usage_flags(&self) -> vk::BufferUsageFlags {
+        self.raw.lock().unwrap().get_primary_buffer_usage_flags()
+    }
+
+    pub fn get_primary_memory_property_flags(&self) -> vk::MemoryPropertyFlags {
+        self.raw.lock().unwrap().get_primary_memory_property_flags()
+    }
+
+    pub fn get_staging_buffer_usage_flags(&self) -> vk::BufferUsageFlags {
+        self.raw.lock().unwrap().get_staging_buffer_usage_flags()
+    }
+
+    pub fn get_staging_memory_property_flags(&self) -> vk::MemoryPropertyFlags {
+        self.raw.lock().unwrap().get_staging_memory_property_flags()
+    }
+
+    pub fn allocate_memory_create_gpu_resources(&mut self, entry: Arc<Entry>, instance: Arc<Instance>) {
+        self.raw.lock().unwrap().allocate_memory_create_gpu_resources(entry, instance);
+    }
+
+    pub fn create_buffer(&self, buffer: &mut vk::Buffer, buffer_usage_flags: vk::BufferUsageFlags) {
+        self.raw.lock().unwrap().create_buffer(buffer, buffer_usage_flags);
+    }
+
+    pub fn to_string(&self) -> String {
+        self.raw.lock().unwrap().to_string()
+    }
+
+    pub fn allocate_bind_memory(
+        &self,
+        entry: Arc<Entry>,
+        instance: Arc<Instance>,
+        buffer: &vk::Buffer,
+        memory_property_flags: vk::MemoryPropertyFlags,
+    ) -> vk::DeviceMemory {
+        self.raw.lock().unwrap().allocate_bind_memory(entry, instance, buffer, memory_property_flags)
+    }
+
+    pub fn destroy(&mut self) {
+        self.raw.lock().unwrap().destroy();
+    }
+}
+
+
+
+pub struct RawTensor {
     physical_device: Arc<vk::PhysicalDevice>,
     device: Arc<Device>,
     data: *mut c_void,
@@ -22,7 +210,7 @@ pub struct Tensor {
     data_type_memory_size: u32,
 }
 
-impl std::fmt::Debug for Tensor {
+impl std::fmt::Debug for RawTensor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Tensor")
             .field("physical_device", &self.physical_device)
@@ -206,7 +394,7 @@ pub enum TensorTypes {
     Unknown,
 }
 
-impl Tensor {
+impl RawTensor {
     pub fn new(
         physical_device: Arc<vk::PhysicalDevice>,
         device: Arc<Device>,
@@ -220,7 +408,7 @@ impl Tensor {
             "Kompute Tensor constructor data length: {}, and type: {:?}",
             element_total_count, tensor_type
         );
-        
+
         Self {
             physical_device,
             device,
@@ -372,7 +560,7 @@ impl Tensor {
     pub fn record_copy_from(
         &self,
         command_buffer: vk::CommandBuffer,
-        copy_from_tensor: Arc<Tensor>,
+        copy_from_tensor: &RawTensor,
     ) {
         let copy_region = vk::BufferCopy::builder()
             .size(self.memory_size() as vk::DeviceSize)
@@ -729,7 +917,7 @@ impl Tensor {
     }
 }
 
-impl Drop for Tensor {
+impl Drop for RawTensor {
     fn drop(&mut self) {
         debug!("Kompute Tensor started destroy()");
 
@@ -831,7 +1019,9 @@ impl<T> Drop for TensorT<T> {
     }
 }
 
-use std::ops::Index;
+use std::ops::{Deref, Index};
+
+use crate::shape::{ConstShape, Shape};
 
 impl<T> Index<usize> for TensorT<T> {
     type Output = T;
@@ -843,8 +1033,8 @@ impl<T> Index<usize> for TensorT<T> {
 
 // TODO: f16 with some crate
 
-impl Into<Tensor> for TensorT<f32> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<f32> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -857,8 +1047,8 @@ impl Into<Tensor> for TensorT<f32> {
     }
 }
 
-impl Into<Tensor> for TensorT<f64> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<f64> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -871,8 +1061,8 @@ impl Into<Tensor> for TensorT<f64> {
     }
 }
 
-impl Into<Tensor> for TensorT<i64> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<i64> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -885,8 +1075,8 @@ impl Into<Tensor> for TensorT<i64> {
     }
 }
 
-impl Into<Tensor> for TensorT<u64> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<u64> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -899,8 +1089,8 @@ impl Into<Tensor> for TensorT<u64> {
     }
 }
 
-impl Into<Tensor> for TensorT<i32> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<i32> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -913,8 +1103,8 @@ impl Into<Tensor> for TensorT<i32> {
     }
 }
 
-impl Into<Tensor> for TensorT<u32> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<u32> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -927,8 +1117,8 @@ impl Into<Tensor> for TensorT<u32> {
     }
 }
 
-impl Into<Tensor> for TensorT<i16> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<i16> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -941,8 +1131,8 @@ impl Into<Tensor> for TensorT<i16> {
     }
 }
 
-impl Into<Tensor> for TensorT<u16> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<u16> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -955,8 +1145,8 @@ impl Into<Tensor> for TensorT<u16> {
     }
 }
 
-impl Into<Tensor> for TensorT<i8> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<i8> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -969,8 +1159,8 @@ impl Into<Tensor> for TensorT<i8> {
     }
 }
 
-impl Into<Tensor> for TensorT<u8> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<u8> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),
@@ -983,8 +1173,8 @@ impl Into<Tensor> for TensorT<u8> {
     }
 }
 
-impl Into<Tensor> for TensorT<bool> {
-    fn into(self) -> Tensor {
+impl<S: Shape> Into<Tensor<S>> for TensorT<bool> {
+    fn into(self) -> Tensor<S> {
         Tensor::new(
             self.physical_device.clone(),
             self.device.clone(),

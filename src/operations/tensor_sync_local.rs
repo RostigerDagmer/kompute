@@ -1,15 +1,15 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use crate::tensor::{Tensor, TensorTypes};
+use crate::tensor::{RawTensor, TensorTypes};
 use ash::vk;
 use log::debug;
 
 pub struct OpTensorSyncLocal {
-    tensors: Vec<Arc<Tensor>>,
+    tensors: Vec<Arc<Mutex<RawTensor>>>,
 }
 
 impl OpTensorSyncLocal {
-    pub fn new(tensors: Vec<Arc<Tensor>>) -> Result<Self, String> {
+    pub fn new(tensors: Vec<Arc<Mutex<RawTensor>>>) -> Result<Self, String> {
         if tensors.is_empty() {
             return Err("OpTensorSyncLocal called with no tensors".to_string());
         }
@@ -19,6 +19,7 @@ impl OpTensorSyncLocal {
 impl super::OpBase for OpTensorSyncLocal {
     fn record(&mut self, command_buffer: vk::CommandBuffer) {
         for tensor in &self.tensors {
+            let tensor = tensor.lock().unwrap();
             if tensor.tensor_type() == TensorTypes::Device {
                 tensor.record_primary_buffer_memory_barrier(
                     command_buffer,

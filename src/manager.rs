@@ -11,7 +11,8 @@ use std::sync::{Arc, Mutex, Weak};
 use crate::algorithm::Algorithm;
 use crate::sequence::Sequence;
 use crate::shaderutil::ShaderSource;
-use crate::tensor::{Tensor, TensorTypes, TensorT, TensorDataTypes, TensorData};
+use crate::shape::{ConstShape, Shape};
+use crate::tensor::{RawTensor, Tensor, TensorData, TensorDataTypes, TensorT, TensorTypes};
 
 // Assuming you have a logger setup, otherwise configure it according to your needs.
 #[cfg(feature = "debug_layer")]
@@ -59,7 +60,6 @@ pub struct Manager {
     // Resource management fields
     managed_sequences: Vec<Weak<Mutex<Sequence>>>,
     managed_algorithms: Vec<Weak<Mutex<Algorithm>>>,
-    managed_tensors: Vec<Weak<Tensor>>,
 
     // Debugging and validation layers
     #[cfg(feature = "debug_layer")]
@@ -225,60 +225,47 @@ impl Manager {
     // pub fn tensor_t<T: TensorData>(&self, data: &[T], tensor_type: TensorTypes) -> Result<Arc<TensorT<T>>, Box<dyn Error>> {
     //     let t: TensorT<T> = TensorT::new(Arc::new(self.physical_device), self.device, data, tensor_type);
     //     let t = Arc::new(t.into());
-    //     self.managed_tensors.push(Arc::downgrade(&t));
     //     Ok(t)
     // }
 
-    pub fn tensor<T: TensorData>(&mut self, data: &[T], tensor_type: TensorTypes) -> Result<Arc<Tensor>, Box<dyn Error>> {
+    pub fn tensor<T: TensorData, S: Shape>(&mut self, data: &[T], tensor_type: TensorTypes) -> Result<Tensor<S>, Box<dyn Error>> {
         // cast data to *mut c_void
         let len = data.len();
         let t = TensorDataTypes::from(data);
         let data = data.as_ptr() as *mut c_void;
         let mut t_ = Tensor::new(Arc::new(self.physical_device), self.device.clone(), data, len as u32, std::mem::size_of::<T>() as u32, t, tensor_type);
         t_.rebuild(self.entry.clone(), self.instance.clone(), data, len as u32, std::mem::size_of::<T>() as u32);
-        let t = Arc::new(t_);
-        let t = t.clone();
-        debug!("tensor created arc cloned");
-        self.managed_tensors.push(Arc::downgrade(&t));
-        debug!("arc downgraded");
-        Ok(t.clone())
+        Ok(t_)
     }
 
-    pub fn tensor_man<T>(&mut self, data: &[T], element_total_count: usize, element_memory_size: usize, data_type: TensorDataTypes, tensor_type: TensorTypes) -> Result<Arc<Tensor>, Box<dyn Error>> {
-        // Implementation goes here
+    pub fn tensor_man<T, S: Shape>(&mut self, data: &[T], element_total_count: usize, element_memory_size: usize, data_type: TensorDataTypes, tensor_type: TensorTypes) -> Result<Tensor<S>, Box<dyn Error>> {
         // cast data to *mut c_void
         let data = data.as_ptr() as *mut c_void;
         let mut t_ = Tensor::new(Arc::new(self.physical_device), self.device.clone(), data, element_total_count as u32, element_memory_size as u32, data_type, tensor_type);
         t_.rebuild(self.entry.clone(), self.instance.clone(), data, element_total_count as u32, element_memory_size as u32);
-        let t = Arc::new(t_);
-        self.managed_tensors.push(Arc::downgrade(&t));
-        Ok(t)
+        Ok(t_)
     }
 
-    pub fn tensor_raw(
+    pub fn tensor_raw<S: Shape>(
         &mut self,
         data: *mut c_void,
         element_total_count: u32,
         element_memory_size: u32,
         data_type: TensorDataTypes,
         tensor_type: TensorTypes,
-    ) -> Result<Arc<Tensor>, Box<dyn Error>> {
-        // Implementation goes here
+    ) -> Result<Tensor<S>, Box<dyn Error>> {
         let mut t_ = Tensor::new(Arc::new(self.physical_device), self.device.clone(), data, element_total_count, element_memory_size, data_type, tensor_type);
         t_.rebuild(self.entry.clone(), self.instance.clone(), data, element_total_count, element_memory_size);
-
-        let t = Arc::new(t_);
-        self.managed_tensors.push(Arc::downgrade(&t));
-        Ok(t)
+        Ok(t_)
     }
 
-    pub fn algorithm<T: TensorData, S: TensorData>(
+    pub fn algorithm<T: TensorData, D: TensorData>(
         &mut self,
-        tensors: Vec<Arc<Tensor>>,
+        tensors: Vec<Arc<Mutex<RawTensor>>>,
         spirv: ShaderSource,
         workgroup: &[u32; 3],
         specialization_constants: Vec<T>,
-        push_constants: Vec<S>,
+        push_constants: Vec<D>,
     ) -> Result<Arc<Mutex<Algorithm>>, Box<dyn Error>> {
         // Implementation goes here
         let mut a_ = Algorithm::new(self.device.clone(), tensors, spirv, *workgroup, specialization_constants, push_constants);
@@ -291,7 +278,6 @@ impl Manager {
     pub fn clear(&mut self) {
         self.managed_algorithms = Vec::new();
         self.managed_sequences = Vec::new();
-        self.managed_tensors = Vec::new();
     }
 
     pub fn get_device_properties(&self) -> vk::PhysicalDeviceProperties {
@@ -365,7 +351,6 @@ impl Manager {
             compute_queues,
             managed_sequences: Vec::new(),
             managed_algorithms: Vec::new(),
-            managed_tensors: Vec::new(),
         }
     }
 }

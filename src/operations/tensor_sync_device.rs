@@ -1,18 +1,18 @@
-use crate::tensor::{Tensor, TensorTypes};
+use crate::tensor::{RawTensor, Tensor, TensorTypes};
 use ash::vk;
 use log::debug;
 use std::error::Error;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::OpBase;
 
 pub struct OpTensorSyncDevice {
-    tensors: Vec<Arc<Tensor>>,
+    tensors: Vec<Arc<Mutex<RawTensor>>>,
 }
 
 impl OpTensorSyncDevice {
-    pub fn new(tensors: Vec<Arc<Tensor>>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(tensors: Vec<Arc<Mutex<RawTensor>>>) -> Result<Self, Box<dyn Error>> {
         if tensors.is_empty() {
             return Err("OpTensorSyncDevice called with no tensors".into());
         }
@@ -23,8 +23,9 @@ impl OpTensorSyncDevice {
 impl OpBase for OpTensorSyncDevice {
     fn record(&mut self, command_buffer: vk::CommandBuffer) {
         for tensor in &self.tensors {
-            if tensor.tensor_type() == TensorTypes::Device {
-                tensor.record_copy_from_staging_to_device(command_buffer);
+            let t = tensor.lock().unwrap();
+            if t.tensor_type() == TensorTypes::Device {
+                t.record_copy_from_staging_to_device(command_buffer);
             }
         }
     }
